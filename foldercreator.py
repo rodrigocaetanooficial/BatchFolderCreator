@@ -1,16 +1,38 @@
 import os
+import re
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 
 # ──────────────────────────────────────────────
-#  Helpers
+#  Helpers & Security
 # ──────────────────────────────────────────────
+
+def sanitize_name(name):
+    """Remove characters not allowed in filenames and prevent path traversal."""
+    # Remove Windows reserved characters: \ / : * ? " < > |
+    # Also remove newline characters and other control codes
+    sanitized = re.sub(r'[\\/:*?"<>|\r\n\t]', '', name)
+    # Prevent traversal by making sure no '..' sequences remain (after sanitizing other symbols)
+    while '..' in sanitized:
+        sanitized = sanitized.replace('..', '.')
+    return sanitized.strip()
+
+
+def is_path_safe(base_dir, target_path):
+    """Ensure that the target_path is actually within the base_dir."""
+    try:
+        abs_base = os.path.abspath(base_dir)
+        abs_target = os.path.abspath(target_path)
+        return abs_target.startswith(abs_base)
+    except (ValueError, OSError):
+        return False
+
 
 def get_preview_name():
     """Return an example folder name based on current field values."""
-    prefix = entry_prefix.get()
-    suffix = entry_suffix.get()
+    prefix = sanitize_name(entry_prefix.get())
+    suffix = sanitize_name(entry_suffix.get())
     padding = var_padding.get()
 
     try:
@@ -33,7 +55,9 @@ def update_ui(*_):
     try:
         start = int(entry_start.get().strip())
         num_str = str(start).zfill(padding) if padding > 0 else str(start)
-        preview_name = f"{prefix}{num_str}{suffix}"
+        p = sanitize_name(prefix)
+        s = sanitize_name(suffix)
+        preview_name = f"{p}{num_str}{s}"
     except ValueError:
         preview_name = "—"
 
@@ -52,14 +76,24 @@ def update_ui(*_):
     # ── button state ──
     valid_folder  = bool(folder) and os.path.isdir(folder)
     valid_numbers = False
+    count = 0
     try:
         s, e = int(entry_start.get().strip()), int(entry_end.get().strip())
-        step  = int(var_step.get())
-        valid_numbers = s <= e and step >= 1
-    except ValueError:
+        step_val = int(var_step.get())
+        if s <= e and step_val >= 1:
+             valid_numbers = True
+             count = len(range(s, e + 1, step_val))
+    except (ValueError, TypeError):
         pass
 
-    btn_create.state(["!disabled"] if valid_folder and valid_numbers else ["disabled"])
+    # Security & DoS Limit: Max 10k folders
+    limit_ok = count <= 10000
+    btn_create.state(["!disabled"] if valid_folder and valid_numbers and limit_ok else ["disabled"])
+    
+    if not limit_ok:
+        lbl_count.config(foreground="red")
+    else:
+        lbl_count.config(foreground="gray")
 
 
 def choose_folder():
@@ -94,10 +128,27 @@ def create_folders():
 
     created = 0
     skipped = 0
+    
+    # Pre-calculate count for security/DoS check
+    total_to_create = len(range(start_num, end_num + 1, step_num))
+    if total_to_create > 10000:
+        messagebox.showwarning("Batch Limit", "To prevent system slowdown, you cannot create more than 10,000 folders at once.")
+        return
+
+    # Sanitize prefix/suffix at use time
+    s_prefix = sanitize_name(prefix)
+    s_suffix = sanitize_name(suffix)
+
     for i in range(start_num, end_num + 1, step_num):
         num_str     = str(i).zfill(padding) if padding > 0 else str(i)
-        folder_name = f"{prefix}{num_str}{suffix}"
+        folder_name = f"{s_prefix}{num_str}{s_suffix}"
         new_path    = os.path.join(folder, folder_name)
+
+        # Path Traversal Guard
+        if not is_path_safe(folder, new_path):
+            messagebox.showerror("Security Hazard", f"Path traversal detected: {folder_name}")
+            return
+
         try:
             if not os.path.exists(new_path):
                 os.makedirs(new_path)

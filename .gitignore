@@ -1,34 +1,10 @@
-<<<<<<< HEAD
-# CakePHP 3
-
-/vendor/*
-/config/app.php
-
-/tmp/cache/models/*
-!/tmp/cache/models/empty
-/tmp/cache/persistent/*
-!/tmp/cache/persistent/empty
-/tmp/cache/views/*
-!/tmp/cache/views/empty
-/tmp/sessions/*
-!/tmp/sessions/empty
-/tmp/tests/*
-!/tmp/tests/empty
-
-/logs/*
-!/logs/empty
-
-# CakePHP 2
-
-/app/tmp/*
-/app/Config/core.php
-/app/Config/database.php
-/vendors/*
-=======
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Agent directory (Local settings for AI assistant)
+.agent/
 
 # Distribution / packaging
 dist/
@@ -60,4 +36,3 @@ Desktop.ini
 
 # Logs
 *.log
->>>>>>> 24bfa72 (Initial commit: UI improvements, Step field added, and project documentation)
