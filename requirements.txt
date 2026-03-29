@@ -1,0 +1,12 @@
+# Batch Folder Creator - Requirements
+
+# Standard library modules used (usually bundled with Python):
+# - os
+# - re
+# - tkinter (In some Linux distros, may require: sudo apt install python3-tk)
+
+# No third-party dependencies required for runtime.
+
+# --- Optional for Development ---
+# To create a Windows executable (.exe):
+# pyinstaller
