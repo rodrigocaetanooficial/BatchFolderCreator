@@ -2,287 +2,248 @@ import os
 import re
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from datetime import datetime
 
+parsed_lines, last_created_folders = [], []
 
-# ──────────────────────────────────────────────
-#  Helpers & Security
-# ──────────────────────────────────────────────
+def sanitize_path(name):
+    s = re.sub(r'[:*?"<>|\r\n\t]', '', name)
+    while '..' in s: s = s.replace('..', '.')
+    return s.strip()
 
-def sanitize_name(name):
-    """Remove characters not allowed in filenames and prevent path traversal."""
-    # Remove Windows reserved characters: \ / : * ? " < > |
-    # Also remove newline characters and other control codes
-    sanitized = re.sub(r'[\\/:*?"<>|\r\n\t]', '', name)
-    # Prevent traversal by making sure no '..' sequences remain (after sanitizing other symbols)
-    while '..' in sanitized:
-        sanitized = sanitized.replace('..', '.')
-    return sanitized.strip()
+def is_safe(base, tgt):
+    try: return os.path.abspath(tgt).startswith(os.path.abspath(base))
+    except Exception: return False
 
+def rep_vars(t):
+    n = datetime.now()
+    for k, v in [('{YYYY}', '%Y'), ('{YY}', '%y'), ('{MM}', '%m'), ('{DD}', '%d'), ('{HH}', '%H'), ('{MIN}', '%M')]:
+        t = t.replace(k, n.strftime(v))
+    return t
 
-def is_path_safe(base_dir, target_path):
-    """Ensure that the target_path is actually within the base_dir."""
+def parse_import(fp):
+    global parsed_lines
+    parsed_lines = []
     try:
-        abs_base = os.path.abspath(base_dir)
-        abs_target = os.path.abspath(target_path)
-        return abs_target.startswith(abs_base)
-    except (ValueError, OSError):
-        return False
+        with open(fp, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line: continue
+                if fp.lower().endswith('.csv'):
+                    parts = re.split(r'[,;]', line)
+                    if parts: line = parts[0].strip()
+                    else: continue
+                if line: parsed_lines.append(line)
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to read file:\n{e}")
 
-
-def get_preview_name():
-    """Return an example folder name based on current field values."""
-    prefix = sanitize_name(entry_prefix.get())
-    suffix = sanitize_name(entry_suffix.get())
-    padding = var_padding.get()
-
-    try:
-        start = int(entry_start.get().strip())
-    except ValueError:
-        start = 1
-
-    num_str = str(start).zfill(padding) if padding > 0 else str(start)
-    return f"{prefix}{num_str}{suffix}"
-
-
-def update_ui(*_):
-    """Refresh counter, preview label and button state on any field change."""
-    prefix = entry_prefix.get()
-    suffix = entry_suffix.get()
-    folder = entry_folder.get().strip()
-    padding = var_padding.get()
-
-    # ── preview ──
-    try:
-        start = int(entry_start.get().strip())
-        num_str = str(start).zfill(padding) if padding > 0 else str(start)
-        p = sanitize_name(prefix)
-        s = sanitize_name(suffix)
-        preview_name = f"{p}{num_str}{s}"
-    except ValueError:
-        preview_name = "—"
-
-    lbl_preview.config(text=f"Preview:  {preview_name}")
-
-    # ── counter ──
-    try:
-        start = int(entry_start.get().strip())
-        end   = int(entry_end.get().strip())
-        step  = max(1, int(var_step.get()))
-        count = max(0, len(range(start, end + 1, step))) if end >= start else 0
-        lbl_count.config(text=f"{count} folder{'s' if count != 1 else ''} will be created")
-    except ValueError:
-        lbl_count.config(text="")
-
-    # ── button state ──
-    valid_folder  = bool(folder) and os.path.isdir(folder)
-    valid_numbers = False
-    count = 0
-    try:
-        s, e = int(entry_start.get().strip()), int(entry_end.get().strip())
-        step_val = int(var_step.get())
-        if s <= e and step_val >= 1:
-             valid_numbers = True
-             count = len(range(s, e + 1, step_val))
-    except (ValueError, TypeError):
-        pass
-
-    # Security & DoS Limit: Max 10k folders
-    limit_ok = count <= 10000
-    btn_create.state(["!disabled"] if valid_folder and valid_numbers and limit_ok else ["disabled"])
-    
-    if not limit_ok:
-        lbl_count.config(foreground="red")
-    else:
-        lbl_count.config(foreground="gray")
-
-
-def choose_folder():
-    folder = filedialog.askdirectory()
-    if folder:
-        entry_folder.delete(0, tk.END)
-        entry_folder.insert(0, folder)
+def choose_file():
+    fp = filedialog.askopenfilename(filetypes=[("Text & CSV", "*.txt *.csv"), ("All Files", "*.*")])
+    if fp:
+        file_path_var.set(os.path.basename(fp))
+        parse_import(fp)
         update_ui()
 
+def choose_folder():
+    f = filedialog.askdirectory()
+    if f:
+        entry_folder.delete(0, tk.END)
+        entry_folder.insert(0, f)
+        update_ui()
+
+def update_ui(*_):
+    folder = entry_folder.get().strip()
+    try: mode = nb.index("current")
+    except Exception: mode = 0
+    count = 0
+    preview = "—"
+
+    if mode == 0:
+        naming_frame.pack(fill="x", pady=(0, 15), before=info_frame)
+        s_prefix = sanitize_path(rep_vars(entry_prefix.get()))
+        s_suffix = sanitize_path(rep_vars(entry_suffix.get()))
+        pad = var_padding.get()
+        try:
+            strt = int(entry_start.get().strip())
+            end = int(entry_end.get().strip())
+            step = max(1, int(var_step.get()))
+            if strt <= end: count = len(range(strt, end + 1, step))
+            preview = f"{s_prefix}{str(strt).zfill(pad) if pad>0 else str(strt)}{s_suffix}"
+        except ValueError: pass
+    else:
+        naming_frame.pack_forget()
+        count = len(parsed_lines)
+        if count > 0: preview = sanitize_path(rep_vars(parsed_lines[0]))
+
+    lbl_count.config(text=f"{count} folder{'s' if count!=1 else ''} will be created")
+    lbl_count.config(foreground="#666666" if count <= 10000 else "#d9534f")
+    lbl_preview.config(text=f"Preview: {preview}")
+
+    valid = bool(folder) and os.path.isdir(folder) and count > 0 and count <= 10000
+    btn_create.state(["!disabled"] if valid else ["disabled"])
+    btn_undo.state(["!disabled"] if last_created_folders else ["disabled"])
+
+def undo_last():
+    global last_created_folders
+    if not last_created_folders: return
+    if not messagebox.askyesno("Undo", f"Desfazer a criação das últimas {len(last_created_folders)} pasta(s)?\n\nApenas pastas vazias serão deletadas."): return
+        
+    deleted, not_empty = 0, 0
+    for p in sorted(last_created_folders, key=lambda x: x.count(os.sep), reverse=True):
+        if os.path.exists(p):
+            try:
+                if not os.listdir(p):
+                    os.rmdir(p)
+                    deleted += 1
+                else: not_empty += 1
+            except Exception: pass
+                
+    m = f"✔ {deleted} pastas vazias apagadas."
+    if not_empty > 0: m += f"\n⚠ {not_empty} pastas mantidas (já contêm arquivos/subpastas)."
+    messagebox.showinfo("Undo", m)
+    last_created_folders.clear()
+    update_ui()
 
 def create_folders():
-    folder  = entry_folder.get().strip()
-    prefix  = entry_prefix.get()
-    suffix  = entry_suffix.get()
-    padding = var_padding.get()
+    global last_created_folders
+    folder = entry_folder.get().strip()
+    mode = nb.index("current")
+    paths = []
 
-    try:
-        start_num = int(entry_start.get().strip())
-        end_num   = int(entry_end.get().strip())
-        step_num  = max(1, int(var_step.get()))
-    except ValueError:
-        messagebox.showerror("Invalid Input", "Start and End must be integers.")
-        return
-
-    if not folder or not os.path.isdir(folder):
-        messagebox.showerror("Invalid Folder", "Please select a valid folder.")
-        return
-
-    if start_num > end_num:
-        messagebox.showerror("Invalid Range", "Start must be ≤ End.")
-        return
-
-    created = 0
-    skipped = 0
-    
-    # Pre-calculate count for security/DoS check
-    total_to_create = len(range(start_num, end_num + 1, step_num))
-    if total_to_create > 10000:
-        messagebox.showwarning("Batch Limit", "To prevent system slowdown, you cannot create more than 10,000 folders at once.")
-        return
-
-    # Sanitize prefix/suffix at use time
-    s_prefix = sanitize_name(prefix)
-    s_suffix = sanitize_name(suffix)
-
-    for i in range(start_num, end_num + 1, step_num):
-        num_str     = str(i).zfill(padding) if padding > 0 else str(i)
-        folder_name = f"{s_prefix}{num_str}{s_suffix}"
-        new_path    = os.path.join(folder, folder_name)
-
-        # Path Traversal Guard
-        if not is_path_safe(folder, new_path):
-            messagebox.showerror("Security Hazard", f"Path traversal detected: {folder_name}")
-            return
-
+    if mode == 0:
+        s_prefix = sanitize_path(rep_vars(entry_prefix.get()))
+        s_suffix = sanitize_path(rep_vars(entry_suffix.get()))
+        pad = var_padding.get()
         try:
-            if not os.path.exists(new_path):
-                os.makedirs(new_path)
+            strt = int(entry_start.get().strip())
+            end = int(entry_end.get().strip())
+            step = max(1, int(var_step.get()))
+            if strt > end: return messagebox.showerror("Error", "Start must be <= End.")
+            for i in range(strt, end + 1, step):
+                paths.append(f"{s_prefix}{str(i).zfill(pad) if pad>0 else str(i)}{s_suffix}")
+        except ValueError: return messagebox.showerror("Error", "Invalid numbers.")
+    else:
+        if not parsed_lines: return messagebox.showerror("Error", "No file / empty file selected.")
+        for line in parsed_lines: paths.append(sanitize_path(rep_vars(line)))
+
+    if len(paths) > 10000: return messagebox.showwarning("Error", "Limit of 10,000 folders exceeded.")
+
+    created, skipped, newly = 0, 0, []
+    for rel in paths:
+        rel = rel.replace('/', os.sep).replace('\\', os.sep)
+        tgt = os.path.abspath(os.path.join(folder, rel))
+        if not is_safe(folder, tgt): return messagebox.showerror("Error", f"Path traversal blocked: {rel}")
+        try:
+            if not os.path.exists(tgt):
+                os.makedirs(tgt)
+                newly.append(tgt)
                 created += 1
-            else:
-                skipped += 1
+            else: skipped += 1
         except Exception as e:
-            if messagebox.askyesno(
-                "Error",
-                f"Failed to create: {folder_name}\n{e}\n\nContinue with remaining folders?"
-            ):
-                continue
-            else:
-                break
+            if not messagebox.askyesno("Error", f"Failed: {rel}\n{e}\n\nContinue?"): break
+                
+    last_created_folders = newly
+    m = f"✔ {created} folders created."
+    if skipped: m += f"\n⚠ {skipped} skipped."
+    messagebox.showinfo("Done", m)
+    update_ui()
 
-    msg = f"✔  {created} folder{'s' if created != 1 else ''} created successfully."
-    if skipped:
-        msg += f"\n⚠  {skipped} already existed and were skipped."
-    messagebox.showinfo("Done", msg)
-
-
-# ──────────────────────────────────────────────
-#  Window
-# ──────────────────────────────────────────────
-
+# UI Setup
 root = tk.Tk()
 root.title("Batch Folder Creator")
+root.geometry("520x480")
 root.resizable(False, False)
 
-# Use the native Windows theme
 style = ttk.Style(root)
-style.theme_use("vista")          # falls back to "winnative" or "clam" on older systems
+style.theme_use("vista" if "vista" in style.theme_names() else "clam")
 
-# ── Separator style (subtle) ──
-style.configure("Separator.TSeparator")
+style.configure("TButton", font=("Segoe UI", 9), padding=5)
+style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), foreground="#2C3E50")
+style.configure("Sub.TLabel", font=("Segoe UI", 9), foreground="#7F8C8D")
+style.configure("Title.TLabel", font=("Segoe UI", 9, "bold"), foreground="#34495E")
 
-# ──────────────────────────────────────────────
-#  Layout
-# ──────────────────────────────────────────────
-
-PAD = 12   # outer padding
-GAP =  6   # inner gap
-
-main_frame = ttk.Frame(root, padding=PAD)
+main_frame = tk.Frame(root, bg="#F8F9FA", padx=20, pady=15)
 main_frame.pack(fill="both", expand=True)
 
-# ── Section: Target Folder ────────────────────
-ttk.Label(main_frame, text="Target Folder", font=("Segoe UI", 9, "bold")).grid(
-    row=0, column=0, columnspan=3, sticky="w", pady=(0, 2))
+# Header
+header_frame = tk.Frame(main_frame, bg="#F8F9FA")
+header_frame.pack(fill="x", pady=(0, 15))
+ttk.Label(header_frame, text="📁 Batch Folder Creator", style="Header.TLabel", background="#F8F9FA").pack(anchor="w")
+ttk.Label(header_frame, text="Generate dozens of folders instantly and safely.", style="Sub.TLabel", background="#F8F9FA").pack(anchor="w")
 
-entry_folder = ttk.Entry(main_frame, width=52)
-entry_folder.grid(row=1, column=0, columnspan=2, sticky="we", padx=(0, GAP))
+# Target Folder
+tf_frame = tk.Frame(main_frame, bg="#F8F9FA")
+tf_frame.pack(fill="x", pady=(0, 15))
+ttk.Label(tf_frame, text="Target Directory", style="Title.TLabel", background="#F8F9FA").pack(anchor="w", pady=(0, 5))
+f_entry_frame = tk.Frame(tf_frame, bg="#F8F9FA")
+f_entry_frame.pack(fill="x")
+entry_folder = ttk.Entry(f_entry_frame)
+entry_folder.pack(side="left", fill="x", expand=True, padx=(0, 10))
 entry_folder.bind("<KeyRelease>", update_ui)
+ttk.Button(f_entry_frame, text="📂 Browse...", command=choose_folder, width=12).pack(side="right")
 
-btn_browse = ttk.Button(main_frame, text="Browse…", command=choose_folder, width=9)
-btn_browse.grid(row=1, column=2, sticky="e")
+# Notebook
+nb = ttk.Notebook(main_frame)
+nb.pack(fill="x", pady=(0, 15))
+nb.bind("<<NotebookTabChanged>>", update_ui)
 
-ttk.Separator(main_frame, orient="horizontal").grid(
-    row=2, column=0, columnspan=3, sticky="we", pady=(PAD, PAD // 2))
-
-# ── Section: Number Range ─────────────────────
-ttk.Label(main_frame, text="Number Range", font=("Segoe UI", 9, "bold")).grid(
-    row=3, column=0, columnspan=3, sticky="w", pady=(0, 2))
-
-range_frame = ttk.Frame(main_frame)
-range_frame.grid(row=4, column=0, columnspan=3, sticky="we")
-
-ttk.Label(range_frame, text="Start:").pack(side="left")
-entry_start = ttk.Entry(range_frame, width=8)
-entry_start.pack(side="left", padx=(4, 12))
+# -- Tab 1
+tab_range = ttk.Frame(nb, padding=15)
+nb.add(tab_range, text="🔢 Number Range")
+ttk.Label(tab_range, text="Start:").grid(row=0, column=0, sticky="w")
+entry_start = ttk.Entry(tab_range, width=8); entry_start.grid(row=0, column=1, padx=(5, 15))
 entry_start.bind("<KeyRelease>", update_ui)
-
-ttk.Label(range_frame, text="End:").pack(side="left")
-entry_end = ttk.Entry(range_frame, width=8)
-entry_end.pack(side="left", padx=(4, 12))
+ttk.Label(tab_range, text="End:").grid(row=0, column=2, sticky="w")
+entry_end = ttk.Entry(tab_range, width=8); entry_end.grid(row=0, column=3, padx=(5, 15))
 entry_end.bind("<KeyRelease>", update_ui)
-
-ttk.Label(range_frame, text="Step:").pack(side="left")
+ttk.Label(tab_range, text="Step:").grid(row=1, column=0, sticky="w", pady=10)
 var_step = tk.IntVar(value=1)
-spin_step = ttk.Spinbox(range_frame, from_=1, to=9999, width=5,
-                        textvariable=var_step, command=update_ui)
-spin_step.pack(side="left", padx=(4, 12))
+spin_step = ttk.Spinbox(tab_range, from_=1, to=9999, width=7, textvariable=var_step, command=update_ui)
+spin_step.grid(row=1, column=1, padx=(5, 15))
 spin_step.bind("<KeyRelease>", update_ui)
-
-ttk.Label(range_frame, text="Zero-pad to:").pack(side="left")
+ttk.Label(tab_range, text="Zero-pad:").grid(row=1, column=2, sticky="w")
 var_padding = tk.IntVar(value=0)
-spin_padding = ttk.Spinbox(range_frame, from_=0, to=6, width=4,
-                           textvariable=var_padding, command=update_ui)
-spin_padding.pack(side="left", padx=(4, 0))
+spin_padding = ttk.Spinbox(tab_range, from_=0, to=6, width=7, textvariable=var_padding, command=update_ui)
+spin_padding.grid(row=1, column=3, padx=(5, 15))
 spin_padding.bind("<KeyRelease>", update_ui)
-ttk.Label(range_frame, text="digits", foreground="gray").pack(side="left", padx=(4, 0))
 
-ttk.Separator(main_frame, orient="horizontal").grid(
-    row=5, column=0, columnspan=3, sticky="we", pady=(PAD, PAD // 2))
+# -- Tab 2
+tab_file = ttk.Frame(nb, padding=15)
+nb.add(tab_file, text="📄 Import File")
+ttk.Label(tab_file, text="Create nested folders from a .txt or .csv file.").pack(anchor="w", pady=(0, 10))
+btn_file = ttk.Button(tab_file, text="📄 Select File...", command=choose_file)
+btn_file.pack(side="left", padx=(0, 15))
+file_path_var = tk.StringVar(value="No file selected")
+ttk.Label(tab_file, textvariable=file_path_var, font=("Segoe UI", 9, "italic")).pack(side="left")
 
-# ── Section: Naming ───────────────────────────
-ttk.Label(main_frame, text="Folder Naming", font=("Segoe UI", 9, "bold")).grid(
-    row=6, column=0, columnspan=3, sticky="w", pady=(0, 2))
-
-naming_frame = ttk.Frame(main_frame)
-naming_frame.grid(row=7, column=0, columnspan=3, sticky="we")
-
-ttk.Label(naming_frame, text="Prefix:").pack(side="left")
-entry_prefix = ttk.Entry(naming_frame, width=16)
-entry_prefix.pack(side="left", padx=(4, 20))
+# Naming Options (Toggleable)
+naming_frame = tk.Frame(main_frame, bg="#F8F9FA")
+naming_frame.pack(fill="x", pady=(0, 15))
+ttk.Label(naming_frame, text="Folder Naming", style="Title.TLabel", background="#F8F9FA").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 5))
+ttk.Label(naming_frame, text="Prefix:", background="#F8F9FA").grid(row=1, column=0, sticky="w")
+entry_prefix = ttk.Entry(naming_frame, width=15); entry_prefix.grid(row=1, column=1, padx=(5, 20))
 entry_prefix.bind("<KeyRelease>", update_ui)
-
-ttk.Label(naming_frame, text="Suffix:").pack(side="left")
-entry_suffix = ttk.Entry(naming_frame, width=16)
-entry_suffix.pack(side="left", padx=(4, 0))
+ttk.Label(naming_frame, text="Suffix:", background="#F8F9FA").grid(row=1, column=2, sticky="w")
+entry_suffix = ttk.Entry(naming_frame, width=15); entry_suffix.grid(row=1, column=3, padx=(5, 0))
 entry_suffix.bind("<KeyRelease>", update_ui)
+ttk.Label(naming_frame, text="💡 Tip: You can insert {YYYY}, {MM}, {DD} for dates", font=("Segoe UI", 8), foreground="#95A5A6", background="#F8F9FA").grid(row=2, column=0, columnspan=4, sticky="w", pady=(5, 0))
 
-ttk.Separator(main_frame, orient="horizontal").grid(
-    row=8, column=0, columnspan=3, sticky="we", pady=(PAD, PAD // 2))
-
-# ── Info bar: preview + counter ──────────────
-info_frame = ttk.Frame(main_frame)
-info_frame.grid(row=9, column=0, columnspan=3, sticky="we", pady=(0, GAP))
-
-lbl_preview = ttk.Label(info_frame, text="Preview:  —",
-                         font=("Consolas", 9), foreground="#0055aa")
+# Preview & Count
+info_frame = tk.Frame(main_frame, bg="#E8ECEF", padx=10, pady=8, highlightbackground="#D5D8DC", highlightthickness=1)
+info_frame.pack(fill="x", pady=(0, 15))
+lbl_preview = tk.Label(info_frame, text="Preview: —", font=("Consolas", 9), fg="#2980B9", bg="#E8ECEF")
 lbl_preview.pack(side="left")
-
-lbl_count = ttk.Label(info_frame, text="", foreground="gray")
+lbl_count = tk.Label(info_frame, text="0 folders will be created", font=("Segoe UI", 9, "bold"), fg="#7F8C8D", bg="#E8ECEF")
 lbl_count.pack(side="right")
 
-# ── Action button ─────────────────────────────
-btn_create = ttk.Button(main_frame, text="Create Folders ▶",
-                        command=create_folders, width=20)
-btn_create.grid(row=10, column=0, columnspan=3, pady=(GAP, 0))
-btn_create.state(["disabled"])   # enabled once inputs are valid
-
-# ── Column weights ────────────────────────────
-for col in range(3):
-    main_frame.columnconfigure(col, weight=1)
+# Actions
+action_frame = tk.Frame(main_frame, bg="#F8F9FA")
+action_frame.pack(fill="x", pady=(5, 0))
+btn_create = ttk.Button(action_frame, text="▶ Create Folders", command=create_folders, width=20, style="TButton")
+btn_create.pack(side="left", padx=(0, 10))
+btn_create.state(["disabled"])
+btn_undo = ttk.Button(action_frame, text="↩ Undo Last Batch", command=undo_last, width=20, style="TButton")
+btn_undo.pack(side="right")
+btn_undo.state(["disabled"])
 
 root.mainloop()

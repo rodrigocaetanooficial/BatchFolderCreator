@@ -7,6 +7,9 @@ A lightweight desktop utility built with Python and Tkinter that lets you create
 ## ✨ Features
 
 - **Batch creation** — generate dozens or hundreds of folders in one click
+- **Import from CSV/TXT** — create folders based on file lists; handles nested subfolders automatically (e.g. `Client/Docs/Photos`)
+- **Date Variables** — insert `{YYYY}`, `{MM}`, `{DD}`, `{HH}`, `{MIN}` dynamically anywhere in folder names
+- **Undo feature** — safely undo an entire batch creation (only deletes empty folders to prevent data loss)
 - **Custom prefix & suffix** — e.g. `Aula_1_Intro`, `Week_05_Review`
 - **Step interval** — create every Nth folder (e.g. 1, 3, 5, 7…)
 - **Zero-padding** — keep folder names neatly aligned (e.g. `01`, `02`, `10`)
@@ -22,9 +25,10 @@ A lightweight desktop utility built with Python and Tkinter that lets you create
 | Section | Description |
 |---|---|
 | **Target Folder** | Browse or type the destination directory |
-| **Number Range** | Set Start, End, Step and Zero-pad digits |
-| **Folder Naming** | Optional Prefix and Suffix for folder names |
+| **Tabs (Modes)** | Choose between "Number Range" (1 to X) or "Import File" (.csv / .txt) |
+| **Folder Naming** | Optional Prefix, Suffix, and `{YYYY}` date variables |
 | **Preview bar** | Shows a real-time example of the folder name |
+| **Actions** | Create Folders and Undo Last buttons |
 
 ---
 
