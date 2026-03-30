@@ -53,17 +53,17 @@ def choose_folder():
 
 def show_vars_help():
     msg = (
-        "Você pode usar tags automáticas para injetar a data/hora atual "
-        "no nome das suas pastas:\n\n"
-        "• {YYYY} - Ano com 4 dígitos (ex: 2024)\n"
-        "• {YY}   - Ano com 2 dígitos (ex: 24)\n"
-        "• {MM}   - Mês (ex: 03)\n"
-        "• {DD}   - Dia do mês (ex: 29)\n"
-        "• {HH}   - Horas\n"
-        "• {MIN}  - Minutos\n\n"
-        "Exemplo: 'Doc_{YYYY}-{MM}' gerará algo como 'Doc_2024-03'"
+        "You can use dynamic tags to automatically inject the current date or time "
+        "into your folder names:\n\n"
+        "• {YYYY} - 4-digit Year (e.g., 2024)\n"
+        "• {YY}   - 2-digit Year (e.g., 24)\n"
+        "• {MM}   - Month (e.g., 03)\n"
+        "• {DD}   - Day of the month (e.g., 29)\n"
+        "• {HH}   - Hours\n"
+        "• {MIN}  - Minutes\n\n"
+        "Example: 'Project_{YYYY}-{MM}' becomes 'Project_2024-03'"
     )
-    messagebox.showinfo("Variáveis Dinâmicas de Data/Hora", msg)
+    messagebox.showinfo("Dynamic Date/Time Variables", msg)
 
 def update_ui(*_):
     folder = entry_folder.get().strip()
@@ -100,7 +100,7 @@ def update_ui(*_):
 def undo_last():
     global last_created_folders
     if not last_created_folders: return
-    if not messagebox.askyesno("Undo", f"Desfazer a criação das últimas {len(last_created_folders)} pasta(s)?\n\nApenas pastas vazias serão deletadas."): return
+    if not messagebox.askyesno("Undo", f"Undo the creation of the last {len(last_created_folders)} folder(s)?\n\nOnly empty folders will be deleted to prevent data loss."): return
         
     deleted, not_empty = 0, 0
     for p in sorted(last_created_folders, key=lambda x: x.count(os.sep), reverse=True):
@@ -112,9 +112,9 @@ def undo_last():
                 else: not_empty += 1
             except Exception: pass
                 
-    m = f"✔ {deleted} pastas vazias apagadas."
-    if not_empty > 0: m += f"\n⚠ {not_empty} pastas mantidas (já contêm arquivos/subpastas)."
-    messagebox.showinfo("Undo", m)
+    m = f"✔ {deleted} empty folders removed."
+    if not_empty > 0: m += f"\n⚠ {not_empty} folders kept (they already contain files/subfolders)."
+    messagebox.showinfo("Undo Result", m)
     last_created_folders.clear()
     update_ui()
 
