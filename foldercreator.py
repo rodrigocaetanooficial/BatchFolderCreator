@@ -51,6 +51,20 @@ def choose_folder():
         entry_folder.insert(0, f)
         update_ui()
 
+def show_vars_help():
+    msg = (
+        "Você pode usar tags automáticas para injetar a data/hora atual "
+        "no nome das suas pastas:\n\n"
+        "• {YYYY} - Ano com 4 dígitos (ex: 2024)\n"
+        "• {YY}   - Ano com 2 dígitos (ex: 24)\n"
+        "• {MM}   - Mês (ex: 03)\n"
+        "• {DD}   - Dia do mês (ex: 29)\n"
+        "• {HH}   - Horas\n"
+        "• {MIN}  - Minutos\n\n"
+        "Exemplo: 'Doc_{YYYY}-{MM}' gerará algo como 'Doc_2024-03'"
+    )
+    messagebox.showinfo("Variáveis Dinâmicas de Data/Hora", msg)
+
 def update_ui(*_):
     folder = entry_folder.get().strip()
     try: mode = nb.index("current")
@@ -219,14 +233,19 @@ ttk.Label(tab_file, textvariable=file_path_var, font=("Segoe UI", 9, "italic")).
 # Naming Options (Toggleable)
 naming_frame = tk.Frame(main_frame, bg="#F8F9FA")
 naming_frame.pack(fill="x", pady=(0, 15))
-ttk.Label(naming_frame, text="Folder Naming", style="Title.TLabel", background="#F8F9FA").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 5))
+ttk.Label(naming_frame, text="Folder Naming", style="Title.TLabel", background="#F8F9FA").grid(row=0, column=0, columnspan=5, sticky="w", pady=(0, 5))
 ttk.Label(naming_frame, text="Prefix:", background="#F8F9FA").grid(row=1, column=0, sticky="w")
-entry_prefix = ttk.Entry(naming_frame, width=15); entry_prefix.grid(row=1, column=1, padx=(5, 20))
+entry_prefix = ttk.Entry(naming_frame, width=15); entry_prefix.grid(row=1, column=1, padx=(5, 10))
 entry_prefix.bind("<KeyRelease>", update_ui)
 ttk.Label(naming_frame, text="Suffix:", background="#F8F9FA").grid(row=1, column=2, sticky="w")
 entry_suffix = ttk.Entry(naming_frame, width=15); entry_suffix.grid(row=1, column=3, padx=(5, 0))
 entry_suffix.bind("<KeyRelease>", update_ui)
-ttk.Label(naming_frame, text="💡 Tip: You can insert {YYYY}, {MM}, {DD} for dates", font=("Segoe UI", 8), foreground="#95A5A6", background="#F8F9FA").grid(row=2, column=0, columnspan=4, sticky="w", pady=(5, 0))
+
+btn_vars_help = ttk.Button(naming_frame, text="❓", width=3, command=show_vars_help)
+btn_vars_help.grid(row=1, column=4, padx=(5, 0))
+
+ttk.Label(naming_frame, text="💡 Tip: Click the [?] button for date variables", font=("Segoe UI", 8), foreground="#95A5A6", background="#F8F9FA").grid(row=2, column=0, columnspan=5, sticky="w", pady=(5, 0))
+
 
 # Preview & Count
 info_frame = tk.Frame(main_frame, bg="#E8ECEF", padx=10, pady=8, highlightbackground="#D5D8DC", highlightthickness=1)
